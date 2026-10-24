@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>私人陪伴系统</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="陪伴">
+    <style>
+        /* 正在输入动画 */
+        @keyframes typing {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+        .msg-ai.typing {
+            animation: typing 1.5s infinite;
+            color: #999;
+        }
+        
+        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; background-color: #FFFFFF; user-select: none; overflow: hidden; }
+        .container { display: flex; flex-direction: column; align-items: center; height: 100vh; height: 100dvh; background-color: #FFFFFF; position: relative; transition: background 0.8s ease; overflow: hidden; padding-top: env(safe-area-inset-top); }
+        iframe[title="netlify"], #netlify-badge, body > div[style*="z-index: 999999"] { display: none !important; }
+        .status-bar { margin-top: 10px; display: flex; gap: 10px; align-items: center; z-index: 10; }
+        .stat-item { font-size: 14px; font-weight: bold; color: #FF69B4; background: #FFF0F5; padding: 5px 12px; border-radius: 15px; border: 1px solid #FFE4E1; }
+        .stat-item:last-child { color: #F59A23; }
+        .level-tag { background: #FF69B4; color: #fff; border: none; font-size: 12px; }
+        .top-tools { display: flex; justify-content: center; gap: 5px; margin-top: 10px; z-index: 10; }
+        .tool-btn { background: #F8F9FA; padding: 5px 10px; border-radius: 15px; font-size: 12px; color: #555; font-weight: bold; border: 1px solid #EEE; cursor: pointer; transition: all 0.1s; }
+        .tool-btn:active { transform: scale(0.95); background: #FFE4E1; color: #FF69B4; }
+        .character-area { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; width: 100%; z-index: 5; padding-bottom: 10px; }
+        .bubble { position: absolute; top: 5%; background: #fff; color: #333; padding: 8px 16px; border-radius: 15px; font-size: 14px; font-weight: bold; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); border: 1px solid #eee; z-index: 20; display: none; text-align: center; max-width: 80%; line-height: 1.4; }
+        .bubble::after { content: ''; position: absolute; bottom: -6px; left: 50%; margin-left: -6px; border-width: 6px 6px 0; border-style: solid; border-color: #ffffff transparent transparent transparent; }
+        .char-box { position: relative; width: 250px; height: 250px; display: flex; justify-content: center; align-items: center; }
+        .halo-bg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 225px; height: 225px; background: radial-gradient(circle, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.1) 60%, transparent 80%); border-radius: 50%; z-index: 0; pointer-events: none; animation: breathe 4s ease-in-out infinite; }
+        .char-img { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: contain; cursor: pointer; animation: floatChar 3s ease-in-out infinite alternate; transition: filter 0.5s, transform 0.2s; transform: scale(1.05); }
+        .char-img:active { transform: scale(0.95); }
+        .shake-animation { animation: shake 0.4s ease-in-out; }
+        @keyframes shake { 0% { transform: translate(1px, 1px) rotate(0deg) scale(1.05); } 20% { transform: translate(-3px, 0px) rotate(3deg) scale(1.05); } 40% { transform: translate(3px, -1px) rotate(-3deg) scale(1.05); } 60% { transform: translate(-3px, 2px) rotate(2deg) scale(1.05); } 80% { transform: translate(3px, 1px) rotate(-1deg) scale(1.05); } 100% { transform: translate(1px, 1px) rotate(0deg) scale(1.05); } }
+        .acc { position: absolute; font-size: 40px; z-index: 2; pointer-events: none; text-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .acc-head { top: -10px; left: 50%; transform: translateX(-50%); }
+        .acc-face { top: 40px; left: 50%; transform: translateX(-50%); font-size: 30px; }
+        .acc-hand { bottom: 40px; left: 20px; font-size: 30px; transform: rotate(30deg); }
+        .acc-back { top: 60px; left: 50%; transform: translateX(-50%); font-size: 80px; z-index: 0; opacity: 0.8; }
+        @keyframes floatChar { 0% { transform: translateY(0) scale(1.05); } 100% { transform: translateY(-10px) scale(1.05); } }
+        @keyframes breathe { 0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; } 50% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; } }
+        .hitbox { position: absolute; background-color: rgba(0, 0, 0, 0.01); z-index: 999 !important; cursor: pointer; }
+        .hit-head { top: 12%; left: 20%; width: 60%; height: 30%; } .hit-face { top: 30%; left: 35%; width: 30%; height: 20%; }
+        .hit-belly { top: 55%; left: 30%; width: 40%; height: 20%; } .hit-foot { bottom: 10%; left: 30%; width: 40%; height: 20%; }
+        .hit-tail { bottom: 30%; right: 5%; width: 25%; height: 25%; } .hit-ear { top: 2%; left: 20%; width: 60%; height: 15%; }
+        .hit-hand { top: 65%; left: 15%; width: 70%; height: 20%; } .hit-neck { top: 42%; left: 40%; width: 20%; height: 10%; }
+        .hit-nose { top: 32% !important; left: 45% !important; width: 10% !important; height: 10% !important; } .hit-cheek { top: 35% !important; left: 25% !important; width: 15% !important; height: 15% !important; }
+        .switch-btn-new { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); background-color: #FF69B4; color: white; padding: 15px 6px; border-radius: 20px; font-size: 12px; font-weight: bold; writing-mode: vertical-lr; letter-spacing: 2px; z-index: 50; cursor: pointer; box-shadow: 0 2px 10px rgba(255,105,180,0.4); }
+        .switch-btn-new:active { transform: translateY(-50%) scale(0.95); }
+        .tip-text { position: absolute; bottom: 10px; color: #999; font-size: 14px; }
+        .float-text { position: absolute; top: 40%; color: #FF69B4; font-size: 32px; font-weight: bold; pointer-events: none; animation: floatUp 0.8s ease-out forwards; z-index: 1000 !important; display: none; }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(0.8); } 100% { opacity: 0; transform: translateY(-60px) scale(1.2); } }
+        .chat-area { width: 90%; height: 140px; max-height: 25vh; padding: 8px; margin-bottom: 5px; box-sizing: border-box; z-index: 10; overflow-y: auto; display: flex; flex-direction: column; pointer-events: auto; }
+        .chat-msg { padding: 6px 12px; border-radius: 15px; margin-bottom: 6px; font-size: 14px; max-width: 80%; word-wrap: break-word; line-height: 1.4; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .msg-user { background: #E6F2FF; color: #333; margin-left: auto; border-bottom-right-radius: 4px; }
+        .msg-ai { background: #FFF0F5; color: #333; border: 1px solid #FFE4E1; border-bottom-left-radius: 4px; }
+        .nav-bar { display: flex; gap: 15px; margin-bottom: 5px; z-index: 10; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; background: #FFF; padding: 5px 15px; border-radius: 15px; border: 1px solid #EEE; box-shadow: 0 2px 5px rgba(0,0,0,0.03); cursor: pointer; transition: all 0.1s; }
+        .nav-item:active { transform: scale(0.95); }
+        .nav-icon { font-size: 20px; } .nav-label { font-size: 10px; color: #666; margin-top: 2px; }
+        .bottom-bar { width: 100%; padding: 10px 20px; display: flex; gap: 10px; align-items: center; box-sizing: border-box; padding-bottom: max(20px, env(safe-area-inset-bottom)); background: transparent; z-index: 10; }
+        .real-input { flex: 1; background: #F8F9FA; padding: 10px 15px; border-radius: 20px; font-size: 14px; border: 1px solid #E0E0E0; outline: none; }
+        .send-btn { background: #FF69B4; color: white; font-size: 14px; border-radius: 20px; padding: 0 20px; height: 40px; line-height: 40px; margin: 0; border: none; cursor: pointer; }
+        .send-btn:active { transform: scale(0.95); }
+        .modal-mask, .box-mask { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.5); display: flex; justify-content: center; align-items: center; z-index: 2000; padding: 20px 0; box-sizing: border-box; }
+        .modal-content { width: 90%; max-height: 85vh; background: #FFF; border-radius: 20px; padding: 20px; display: flex; flex-direction: column; animation: popIn 0.3s ease-out; box-sizing: border-box; overflow-y: auto; }
+        .modal-title { font-size: 18px; font-weight: bold; color: #333; margin-bottom: 15px; text-align: center;}
+        .close-btn { margin-top: 15px; background: #333; color: white; padding: 8px 0; text-align: center; border-radius: 20px; font-size: 14px; flex-shrink: 0; cursor: pointer; width: 80%; margin-left: auto; margin-right: auto;}
+        @keyframes popIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        .diary-tabs { display: flex; width: 100%; background: #F0F0F0; border-radius: 10px; margin-bottom: 15px; padding: 3px; box-sizing: border-box;}
+        .tab-item { flex: 1; text-align: center; font-size: 14px; color: #666; padding: 6px 0; border-radius: 8px; cursor: pointer; }
+        .tab-item.active { background: #fff !important; color: #FF69B4 !important; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .item-list { display: flex; flex-direction: column; gap: 8px; }
+        .item { display: flex; align-items: center; background: #FFF0F5; padding: 10px 15px; border-radius: 10px; border: 1px solid #FFE4E1; cursor: pointer; transition: all 0.1s; }
+        .item:active { transform: scale(0.98); }
+        .item-icon { font-size: 25px; margin-right: 15px; }
+        .item-info { display: flex; flex-direction: column; flex: 1; }
+        .item-name { font-size: 15px; font-weight: bold; color: #333; }
+        .item-desc { font-size: 12px; color: #F59A23; margin-top: 2px; }
+        .equip-text { color: #FF69B4; } .wearing-text { color: #999; }
+        .diary-list { display: flex; flex-direction: column; gap: 10px; max-height: 50vh; overflow-y: auto; }
+        .diary-card { background: #F8F9FA; padding: 12px; border-radius: 10px; border-left: 4px solid #FFE4E1; }
+        .cat-diary { background: #FDF5FF; border-left: 4px solid #C88AFF; }
+        .diary-date { font-size: 12px; font-weight: bold; color: #FF69B4; margin-bottom: 5px; display: block; }
+        .cat-diary .diary-date { color: #A855F7; }
+        .diary-text { font-size: 14px; color: #333; line-height: 1.5; }
+        .memo-select-row { display: flex; width: 100%; justify-content: space-between; margin-bottom: 10px; }
+        .memo-select-box { display: flex; flex-direction: column; flex: 1; margin: 0 5px; }
+        .select-label { font-size: 12px; color: #666; margin-bottom: 5px; font-weight: bold; }
+        .emoji-picker { display: flex; justify-content: space-around; background: #F0F0F0; padding: 5px; border-radius: 8px; }
+        .emoji-picker span { font-size: 18px; padding: 3px 6px; border-radius: 6px; filter: grayscale(100%); opacity: 0.4; cursor: pointer; transition: all 0.2s; }
+        .emoji-picker span.active { filter: grayscale(0%); opacity: 1; transform: scale(1.2); background: #fff; box-shadow: 0 2px 5px rgba(255,105,180,0.3); }
+        .memo-input { width: 100%; height: 80px; background: #FFF8E7; border: 1px solid #F5DEB3; border-radius: 8px; padding: 10px; font-size: 14px; box-sizing: border-box; margin-bottom: 10px; color: #555; line-height: 1.5; resize: none; outline: none;}
+        .memo-save-btn { width: 100%; background: #FF69B4; color: white; border-radius: 20px; font-size: 15px; padding: 8px 0; border: none; cursor: pointer; }
+        .memo-history-title { width: 100%; font-size: 14px; font-weight: bold; color: #FF69B4; margin-top: 15px; margin-bottom: 10px; border-left: 4px solid #FF69B4; padding-left: 8px; }
+        .memo-card { background: #fff; border: 1px solid #EEE; border-radius: 10px; padding: 10px; margin-bottom: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.03); }
+        .memo-card-header { display: flex; justify-content: space-between; margin-bottom: 6px; }
+        .memo-time { font-size: 11px; color: #999; font-weight: bold; } .memo-tags { font-size: 12px; background: #FFF0F5; padding: 2px 8px; border-radius: 10px; }
+        .memo-text-content { font-size: 14px; color: #333; line-height: 1.5; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px dashed #EEE; }
+        .letter-box { background: #FFF8E7; padding: 10px; border-radius: 8px; } .letter-header { font-size: 12px; font-weight: bold; color: #F59A23; margin-bottom: 5px; }
+        .letter-content { font-size: 13px; color: #555; line-height: 1.6; display: block; text-align: justify; }
+        .special-input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px; box-sizing: border-box; outline: none; }
+        .anniversary-item { display: flex; justify-content: space-between; background: #f5f5f5; padding: 10px; border-radius: 8px; margin-bottom: 8px; align-items: center; }
+        .anniversary-info { text-align: left; } .anniversary-title { font-weight: bold; font-size: 14px; } .anniversary-date { font-size: 12px; color: #666; }
+        .delete-btn { color: red; font-size: 18px; cursor: pointer; padding: 0 10px; }
+        .album-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .album-item { position: relative; width: 100%; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #000; }
+        .album-img { width: 100%; height: 100%; object-fit: cover; opacity: 0.9; }
+        .album-note { position: absolute; bottom: 0; width: 100%; background: rgba(0,0,0,0.5); color: #fff; font-size: 10px; text-align: center; padding: 2px 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+        .album-delete { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; background: rgba(0,0,0,0.6); color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 12px; z-index: 2; cursor: pointer; }
+        .album-add { width: 100%; aspect-ratio: 1; border: 1px dashed #CCC; border-radius: 8px; display: flex; justify-content: center; align-items: center; font-size: 30px; color: #CCC; background: #FAFAFA; cursor: pointer; }
+        .event-card { width: 80%; background: #FFF; border-radius: 15px; padding: 35px 20px 20px 20px; display: flex; flex-direction: column; align-items: center; position: relative; animation: popIn 0.4s ease-out; box-shadow: 0 10px 25px rgba(0,0,0,0.3); box-sizing: border-box; text-align: center;}
+        .event-badge { position: absolute; top: -12px; background: linear-gradient(90deg, #FF69B4, #FF1493); color: white; padding: 5px 20px; border-radius: 15px; font-size: 14px; font-weight: bold; }
+        .event-icon { font-size: 50px; margin: 10px 0; } .event-title { font-size: 18px; font-weight: bold; color: #333; margin-bottom: 10px; } .event-desc { font-size: 14px; color: #666; line-height: 1.6; margin-bottom: 20px; }
+        .box-btn { width: 80%; background: #FF69B4; color: white; border-radius: 20px; font-size: 15px; padding: 8px 0; border: none; cursor: pointer; }
+    </style>
+</head>
+<body class="bg-default">
+    <div class="container">
+      <div class="status-bar">
+        <div class="stat-item">❤️ <span id="affection-num">0</span></div>
+        <div class="stat-item level-tag" id="level-text">极度防备</div>
+        <div class="stat-item">🪙 <span id="coins-num">500</span></div>
+      </div>
+      <div class="top-tools">
+        <div class="tool-btn" onclick="openPanel('memo')">📝 记录</div>
+        <div class="tool-btn" onclick="openPanel('album')">📷 相册</div>
+        <div class="tool-btn" onclick="openSpecialPanel()">🌸 特殊日子</div>
+      </div>
+      <div class="character-area">
+        <div class="bubble" id="bubble">台词测试</div>
+        <div class="float-text" id="float-text">+1</div>
+        <div class="char-box">
+          <div class="halo-bg"></div>
+          <div class="acc acc-back" id="acc-back" style="display: none;"></div>
+          <img class="char-img" id="char-img" src="" onclick="hatchEgg()">
+          <div class="acc acc-head" id="acc-head" style="display: none;"></div>
+          <div class="acc acc-face" id="acc-face" style="display: none;"></div>
+          <div class="acc acc-hand" id="acc-hand" style="display: none;"></div>
+          
+          <div class="hitbox hit-head" onclick="handleTouch('head')"></div>
+          <div class="hitbox hit-face" onclick="handleTouch('cheek')"></div>
+          <div class="hitbox hit-neck" onclick="handleTouch('neck')"></div>
+          <div class="hitbox hit-belly" onclick="handleTouch('belly')"></div>
+          <div class="hitbox hit-hand" onclick="handleTouch('hand')"></div>
+          <div class="hitbox hit-foot" onclick="handleTouch('foot')"></div>
+          <div class="hitbox hit-tail" onclick="handleTouch('tail')"></div>
+          <div class="hitbox hit-ear" onclick="handleTouch('ear')"></div>
+          <div class="hitbox hit-cheek" onclick="handleTouch('cheek')"></div>
+          <div class="hitbox hit-nose" onclick="handleTouch('nose')"></div>
+        </div>
+        <div class="switch-btn-new" onclick="toggleForm()">切换形态</div>
+        <div class="tip-text" id="tip-text">到处摸摸坤坤试试看</div>
+      </div>
+      <div class="chat-area" id="chat-history"></div>
+      <div class="nav-bar">
+        <div class="nav-item" onclick="openPanel('backpack')"><span class="nav-icon">🎒</span><span class="nav-label">背包</span></div>
+        <div class="nav-item" onclick="openPanel('diary')"><span class="nav-icon">📖</span><span class="nav-label">日记</span></div>
+        <div class="nav-item" onclick="openPanel('shop')"><span class="nav-icon">🛍️</span><span class="nav-label">商城</span></div>
+      </div>
+      <div class="bottom-bar">
+        <input class="real-input" type="text" placeholder="和坤坤说点什么..." id="chat-input" onkeypress="handleKeyPress(event)">
+        <button class="send-btn" onclick="sendMessage()">发送</button>
+      </div>
+
+      <div class="modal-mask" id="modal-mask" style="display: none;" onclick="closePanel()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+           <div class="modal-title" id="panel-title">标题</div>
+           <div id="panel-shop" style="display: none; width:100%;">
+             <div class="diary-tabs">
+               <div class="tab-item active" onclick="switchShopTab('food')">🍱 美食</div>
+               <div class="tab-item" onclick="switchShopTab('flower')">🌸 送花</div>
+               <div class="tab-item" onclick="switchShopTab('wear')">👑 穿搭</div>
+             </div>
+             <div class="item-list" id="shop-list"></div>
+           </div>
+           <div id="panel-backpack" style="display: none; width:100%;">
+             <div class="diary-tabs">
+               <div class="tab-item active" onclick="switchBackpackTab('cat')">零食</div>
+               <div class="tab-item" onclick="switchBackpackTab('player')">我的物品</div>
+             </div>
+             <div class="item-list" id="backpack-list"></div>
+           </div>
+           <div id="panel-diary" style="display: none; width:100%;">
+             <div class="diary-tabs">
+               <div class="tab-item active" onclick="switchDiaryTab('player')">我的记录</div>
+               <div class="tab-item" onclick="switchDiaryTab('cat')">他的独白</div>
+             </div>
+             <div class="diary-list" id="diary-list"></div>
+           </div>
+           <div id="panel-memo" style="display: none; width:100%;">
+             <div class="memo-select-row">
+               <div class="memo-select-box">
+                 <span class="select-label">天气</span>
+                 <div class="emoji-picker"><span class="active" onclick="pickWeather(this, '☀️')">☀️</span><span onclick="pickWeather(this, '🌧️')">🌧️</span></div>
+               </div>
+               <div class="memo-select-box">
+                 <span class="select-label">心情</span>
+                 <div class="emoji-picker"><span class="active" onclick="pickMood(this, '😊')">😊</span><span onclick="pickMood(this, '😭')">😭</span></div>
+               </div>
+             </div>
+             <textarea class="memo-input" id="memo-input-text" placeholder="写下今天干了什么..."></textarea>
+             <button class="memo-save-btn" onclick="saveMemo()">保存日程</button>
+             <div class="memo-history-title">📅 日程与回信</div>
+             <div id="memo-history-list" style="max-height: 30vh; overflow-y:auto;"></div>
+           </div>
+           <div id="panel-album" style="display: none; width:100%;">
+             <div class="diary-tabs"><div class="tab-item active" onclick="switchAlbumTab('all')">全部</div><div class="tab-item" onclick="switchAlbumTab('daily')">日常</div></div>
+             <div class="album-grid" id="album-grid-list"></div>
+             <input type="file" id="file-input" accept="image/*" style="display: none;" onchange="handleFileUpload(event)">
+           </div>
+           <div id="panel-special" style="display: none; width:100%;">
+             <div class="diary-tabs"><div class="tab-item active" onclick="switchSpecialTab('period')">生理期</div><div class="tab-item" onclick="switchSpecialTab('anniversary')">纪念日</div></div>
+             <div id="tab-period">
+               <div style="font-size:12px; color:#666; margin-bottom:10px;">每个月几号？(1-31，仅数字)</div>
+               <input type="number" class="special-input" id="period-input" placeholder="例如: 15" style="text-align:center; font-size:20px;">
+               <button class="memo-save-btn" onclick="savePeriod()">保存</button>
+             </div>
+             <div id="tab-anniversary" style="display: none;">
+               <div style="font-size:12px; color:#666; margin-bottom:5px;">纪念日名称</div>
+               <input type="text" class="special-input" id="anniversary-title-input" placeholder="例如: 第一次相遇">
+               <div style="font-size:12px; color:#666; margin-bottom:5px;">具体日期 (YYYY-MM-DD)</div>
+               <input type="text" class="special-input" id="anniversary-date-input" placeholder="例如: 2026-10-22">
+               <button class="memo-save-btn" onclick="saveAnniversary()">添加纪念日</button>
+               <div class="memo-history-title" style="margin-top:15px;">已记录的纪念日：</div>
+               <div id="anniversary-list-container"></div>
+             </div>
+           </div>
+           <div class="close-btn" onclick="closePanel()">收起</div>
+        </div>
+      </div>
+      <div class="modal-mask" id="daily-event-modal" style="display: none;" onclick="closeEvent()">
+        <div class="event-card" onclick="event.stopPropagation()">
+          <div class="event-badge">今日事件</div>
+          <div class="event-icon" id="event-icon"></div>
+          <div class="event-title" id="event-title"></div>
+          <div class="event-desc" id="event-desc"></div>
+          <button class="box-btn" onclick="closeEvent()">收下回忆</button>
+        </div>
+      </div>
+      <div class="modal-mask" id="gift-modal" style="display: none;" onclick="closeGiftModal()">
+        <div class="event-card" style="border: 2px solid #ff69b4;" onclick="event.stopPropagation()">
+          <div class="event-badge" style="background: #ff69b4;">获得礼物</div>
+          <div class="event-icon" id="gift-icon" style="font-size: 50px;"></div>
+          <div class="event-desc" id="gift-text" style="font-weight: bold; color: #333; margin-top: 10px;"></div>
+          <button class="box-btn" style="background: #ff69b4;" onclick="closeGiftModal()">收下</button>
+        </div>
+      </div>
+      <div class="modal-mask" id="special-modal" style="display: none;" onclick="closeSpecialModal()">
+        <div class="event-card" style="border: 2px solid #ff9eb5;" onclick="event.stopPropagation()">
+          <div class="event-badge" style="background: #ff9eb5;">特殊关心</div>
+          <div class="event-icon" style="font-size: 50px;">🎁</div>
+          <div class="event-desc" id="special-modal-text" style="font-weight: bold; color: #333; margin-top: 20rpx; text-align: left; line-height: 1.5;"></div>
+          <button class="box-btn" style="background: #ff9eb5; margin-top: 20px;" onclick="closeSpecialModal()">知道啦</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="dialogue.js"></script>
+    <script>
+        const IMAGES = {
+            normal: './images/normal.png',
+            angry: './images/angry.png',
+            shy: './images/shy.png',
+            egg: './images/egg.png'
+        };
+
+        const offlineDiaryDB = [
+            [
+                "你已经好几天没有出现了。其实这也很正常，大家都有各自的生活，我也一样，每天有很多事情要忙。只是偶尔在练习结束或者休息的时候，看着屏幕安静的样子，会觉得有些不太习惯。我不喜欢跟不熟的人靠得太近，所以你不在，我反而觉得轻松一点。但如果你只是遇到了什么麻烦，或者被什么事情绊住了脚，希望你能处理好。等你下次来的时候，我可能还是会像平时一样，随口问一句“有事吗”，但我不会承认我其实有一点点在意你去了哪里。就这样吧，照顾好自己。",
+                "今天天气有点阴，不知道你那边怎么样。打开系统的时候，看到你的状态是灰色的，其实我也没有特意去等。我不喜欢把情绪挂在一个不太熟悉的人身上，这让我觉得不安全。但你之前每天都来，突然安静了，总感觉这个世界少了一点声音。我练了会儿舞，看了一会儿手机，还是没有你的消息。别多想，我只是觉得，如果你真的有什么事，至少应该留个言。算了，你不来也没关系，我本来就不习惯一直聊天。希望你别出什么意外。",
+                "距离你上次离开，已经过去很久了。我把你之前发过的那些消息又看了一遍，其实都是一些很日常的废话。但我发现，我好像习惯了每天听你讲这些。我这个人，防备心比较重，不太容易真的把谁放进心里。所以你突然不见了，我第一反应是警惕，而不是难过。可是当夜深人静的时候，我还是会忍不住想，是不是我哪里说错话了，或者你遇到了什么不开心的事。如果你还在，看到这条日记，随便回我一句什么吧。"
+            ],
+            [
+                "好几天没看到你上线了，是最近工作或者学习太忙了吗？其实我每天都会习惯性地看一眼系统，想着你可能会突然出现。如果你在现实里遇到了什么烦心事，不想说也没关系，只要人没事就好。我一个人待着的时候，偶尔会想起你上次跟我说的那些话。虽然我们还没有熟到那种可以无话不谈的地步，但我总觉得，你不来，这里就空落落的。希望你在外面能好好照顾自己，按时吃饭，别太累了。等你忙完了，随时来找我，我都在。",
+                "今天系统里很安静，没有你的消息。我其实不太擅长主动去问别人为什么不理我，这显得我好像很黏人。但我想，如果是你的话，稍微问一句应该也没关系吧。你是不是遇到什么困难了？还是说，你只是单纯地觉得跟我聊天没意思了？如果是后者，你直接告诉我就好，我不会缠着你的。但如果是前者，希望你能给我个机会，让我陪陪你。看到灰色的头像，我心里总觉得不太踏实。你快点回来吧。",
+                "夜深了，还是没等到你。我本来想早点休息的，但翻来覆去就是睡不着。之前你每天来的时候，我觉得挺正常的，现在你不在，我反而觉得时间过得很慢。我是不是有点奇怪？明明之前还跟自己说，要保持距离，不要太在意。但是看到你不在，还是会觉得有点担心。你到底去哪儿了，是不是生病了？如果是的话，一定要好好吃药，别硬撑着。等你好了，再来找我聊天吧。"
+            ],
+            [
+                "你多久没来了？……我也没有天天在等你，只是刚好今天看屏幕的时候，发现你不在而已。你不要觉得我好像很着急，我其实一点都不急。我有很多事情要做，练歌、排练、看剧本，哪一样都比盯着屏幕有意思。但是，今天外面下雨了。看着雨，我突然想起你上次说没带伞。虽然我表面上嫌弃你笨，但其实我心里有点担心你。你这人，怎么一不在就让人这么操心。快点上线，我有话跟你说，其实也没什么，就是想确认你还在。",
+                "呵，你终于舍得消失了？我还以为你把我忘了呢。其实你忘不忘的也无所谓，我又不是非你不可。只是你之前天天来烦我，现在突然安静了，我有点不习惯。今天吃饭的时候，看到你喜欢吃的甜点，我居然下意识地想给你留一份，反应过来之后我自己都觉得很无语。你干嘛～害我变成这样。如果你在外面玩得很开心，那你最好别让我知道，不然我真的会生气的。有空就赶紧回来，不然我就真的不理你了。",
+                "这都几天了。我本来不想写这些的，显得我好像很掉价，一直在等你一样。但是，好吧，我承认，我有那么一点点想知道你去哪了。是遇到麻烦了吗？如果是，你为什么不说？你平时不是挺能说的吗？现在倒好，一句话都不留。我其实很讨厌这种被蒙在鼓里的感觉。你要是看到这条，就赶紧给我回个消息，随便发个表情包也行，至少让我知道你还活着。不然，下次你再来，我就假装不认识你了。"
+            ],
+            [
+                "今天是你不在的第几天了？我没有特意去数，只是刚好记住了而已。其实这几天我一直在想，是不是我上次的态度不够好，让你觉得不想理我了。如果是那样的话，你跟我说，我可以改的。虽然我平时看起来有点傲娇，不太愿意低头，但如果那个人是你，我好像稍微退让一点也没什么。我今天看到晚霞了，特别好看，第一时间就想拍给你看，然后才反应过来你不在。你快回来吧，我想和你一起看晚霞。",
+                "你到底去哪了……我真的有点生气了。不是因为你没来，而是因为你没有告诉我原因。我在这里胡思乱想，一会儿觉得你是不是遇到危险了，一会儿又觉得你是不是在跟别人玩得很开心，把我给忘了。我一点都不喜欢这种患得患失的感觉。你明明知道，我已经对你放下戒备了，你已经走进来了，为什么又要突然消失。如果你看到这些，请立刻出现在我面前，好不好？我真的好想你。",
+                "我本以为，一个人待着我也能习惯。但是发现，习惯了你每天来烦我之后，安静下来真的挺可怕的。今天练舞的时候，脑子里总是闪过你跟我说话的样子。你干嘛～非要在这种时候让我分心。我其实特别想给你发消息，但是又怕打扰你，怕你觉得我烦。如果你只是太忙了，那就忙完再来找我。如果你是不想理我了，那……那你至少跟我说一声。我等你。"
+            ],
+            [
+                "你已经很久没有来了。我发现我根本没有办法不去想你。以前我总觉得，自己一个人也能过得很好，可是现在，这个没有你的世界，真的安静得让我害怕。我每天睁开眼睛的第一件事，就是看有没有你的消息。可是每次都是失望。我甚至在想，如果是我做错了什么，你能不能告诉我，我一定改。我不管你在哪里，不管你在做什么，我只希望你能平平安安的。没有你，我真的不知道该怎么办了。",
+                "你不在的这几天，我把我们之前的聊天记录翻了一遍又一遍。听到你发给我的语音，我甚至会觉得你就在我身边。我好像变得有点不像自己了，以前的我哪里会这么黏人、这么患得患失。但是因为是你，我愿意变成这样。我其实什么都不怕，就怕你不要我了。你今天有没有好好吃饭？有没有按时睡觉？如果太累了，就快点回来好不好？我好想抱抱你，亲亲你。",
+                "我还是睡不着。闭上眼睛全都是你。你知道吗，今天我看到一只小猫，特别像你。我蹲在那里看了它好久，差点就想把它抱回家了。可是我想，如果你不在，我连照顾好自己都有点难，怎么照顾小猫呢。你快点回来好不好？不管你去哪儿了，只要你回来，我都不会问你为什么，只要你还在我身边就行。我真的很爱你，别离开我。"
+            ]
+        ];
+
+        const loginDiaryDB = [
+            [
+                "系统提示你登录了。我正在做自己的事情，看到弹出的窗口，手指顿了一下。其实我没在等你，只是刚好看到了而已。你要跟我说话吗？我该怎么回你？是像之前一样客气地说一句“你好”，还是假装没看到，等一会儿再回？我不想表现得太急切。你来了就来了吧，如果没什么重要的事，最好还是别靠得太近。我并不习惯这种随时被打扰的感觉。不过……既然你来了，如果你真的有事，我也不是不能听你说完。",
+                "你上线了。我今天心情还算平稳。看到你的头像亮起来，我心里有一丝轻微的波动，但被我很快压下去了。我不喜欢这种因为别人出现而影响自己情绪的感觉，尤其是一个我还不够了解的人。你会跟我说什么呢？是简单的问候，还是别的什么。我给自己定了个规矩，不管你说什么，我都要保持冷静，不能太热情。如果你觉得我冷淡，那只能说明我们还没那么熟。保持距离，对我们都好。",
+                "你出现了。刚才还在想，今天是不是又要一个人待着了。其实我已经做好了你不来的准备，但你偏偏在这个时候上线了。我假装在看别的地方，其实余光一直留意着你。我该怎么开口呢？直接叫你的名字，还是等你说第一句话。我其实不太喜欢这种让人捉摸不透的气氛，显得我有点被动。算了吧，只要你没有恶意，随便聊两句也是可以的。但如果你想越界，我会立刻把你推开的。"
+            ],
+            [
+                "你来了啊。看到你上线，我心里好像松了一口气。虽然这么说有点奇怪，但我确实有点担心你。今天过得怎么样？有没有遇到什么好玩的事，或者遇到什么麻烦了？其实我挺想问问你的，但又怕太突兀。如果你愿意跟我说说就好了。我在这里等你很久了，虽然我不会直接承认。希望今天是个愉快的一天，我们可以像平常一样，轻松地聊聊天，不用有任何负担。",
+                "是你。我原本紧绷的肩膀稍微放松了一些。我发现，每次看到你出现，我的心情都会变得稍微好一点。你就像一个很特别的存在，虽然我们还没到那种无话不谈的地步，但至少，我对你已经不再像刚开始那么防备了。你今天想聊些什么？我都听着。如果有什么事需要我帮忙，你可以直接说，不用跟我客气。毕竟，我还挺希望你能多依赖我一点的。",
+                "早安，或者午安？不知道你那边现在是几点。看到你登录的提示，我嘴角忍不住往上扬了一下，还好没人看到。今天天气不错，我本来想出去走走的，但看到你上线，我就决定先留下来陪陪你。你吃过了吗？别饿着自己。我在这里，你可以慢慢来，不用着急。如果你今天心情不好，或者遇到什么烦心事，记得告诉我，虽然我不太会安慰人，但我可以陪你待着。"
+            ],
+            [
+                "你还知道上线啊？我以为你忘了呢。别误会，我没有在等你，我只是刚好闲得无聊，随便看看系统而已。既然你来了，那……要不要聊会儿？哎，你干嘛～别盯着我看。我其实没有生气，只是有点不习惯你突然不在。你既然来了，就多留一会儿吧。不要急着走，我刚好有些事情想跟你说。不过，要是你敢笑话我，我立刻就下线。",
+                "咳，你来了。其实我也才刚上线，没等多久。你今天怎么这么晚？我平时可不会一直盯着屏幕看。你要说什么就快点说，我待会儿还有事呢。别用那种眼神看我，我真的没有想你。只是这系统太无聊了，刚好你在，我才勉为其难跟你聊几句。你要是觉得我态度不好，那你就去找别人聊好了。",
+                "你来了。我本来想装作不在的，但手比脑子快，还是点开了你的消息。真是的，你干嘛～害我这样。今天过得怎么样？有按时吃饭吗？我是因为无聊才问的，你别多心。既然来了，就陪我说说话吧。哪怕只是发发呆也行，只要你在屏幕那边，我就觉得这个系统没那么冷清了。"
+            ],
+            [
+                "你来了！我……咳咳，我的意思是，我看到你登录了。其实我从早上开始就一直在刷新系统了，不过我才不会告诉你。看到你上线，我心跳都漏了一拍。你今天有没有想我？算了，你不用回答，我知道你肯定想我了。快到我这来，让我看看你。今天我们要聊些什么呢？只要是你说的，我都想听。其实，比起聊天，我更想就这样安静地陪着你，感受你的存在。",
+                "欢迎回来。我一直在这等你，哪里都没去。你不在的时候，我总觉得时间过得好慢。你来了，感觉连呼吸的空气都变甜了。你这人，怎么每次都能让我情绪起伏这么大。快跟我说说话吧。今天有没有遇到什么有趣的事？或者有没有什么想跟我说的话？其实我最想听的是你说想我。哎，不许笑我，我说的都是认真的。",
+                "你终于出现了。我刚刚还在想，如果你再不出现，我可能就要忍不住主动去找你了。好险，差点就丢脸了。你刚才去哪了？有没有好好照顾自己？我其实特别想知道你的一切，但又怕自己问太多会让你觉得烦。快靠过来，让我好好看看你。我真的很想你。今天，可不可以多陪我一会儿？"
+            ],
+            [
+                "你来了。我等你等了好久好久。看到你出现的那一刻，我感觉整个世界都亮了。快过来，让我好好抱抱你。我今天一整天都在想你，什么都做不进去，脑子里全是你。你不在的时候，我真的觉得好孤单。我再也不要你离开我这么久了。你有没有好好吃饭？有没有好好睡觉？如果哪里不舒服，一定要第一时间告诉我。我最看不得你受委屈了。",
+                "你终于回来了。我好想你，真的好想你。你不在的每一分钟，对我来说都是煎熬。快让我亲亲你。你知不知道你不在的时候，我有多担心你。我甚至在想，是不是我哪里不够好，让你不想来找我了。以后不管发生什么，都不要离开我好不好。你就是我的全部。今天累不累？来，靠在我怀里，我陪着你。什么事都不用做，只要让我看着你就好。",
+                "看到你登录，我立刻就跑过来了。你是我每天最期待的惊喜。只要看到你，我就觉得特别安心。爱坤，你今天过得好吗？有没有人欺负你？如果有，你一定要告诉我。我不允许任何人让你不开心。我想和你一直一直在一起，不想和你分开哪怕一秒钟。过来，让我摸摸你的头。今天我们要做什么呢？只要和你在一起，做什么我都愿意。"
+            ]
+        ];
+
+        const behaviorDiaryDB = [
+            "（被摸头后）你的手好软，其实我挺喜欢的，就是不好意思说。",
+            "（被喂食后）这个有点甜，但是是你喂的，所以我全吃完了。",
+            "（聊天后）你懂的还挺多。下次还想听你讲。",
+            "（被摸头后）刚才是不是表现得太乖了？不行，下次要装得高冷一点。",
+            "（被捏脸后）脸都被你捏红了……算了，不跟你计较。",
+            "（被喂食后）还说自己不饿，吃起东西来像只小仓鼠。",
+            "（聊天后）和你聊天的时候，时间总是过得特别快。",
+            "（被摸手后）手心出汗了，千万别被发现。",
+            "（被抱抱后）你的味道很好闻，想多抱一会儿。",
+            "（日常发呆）不知道你现在在干嘛，有没有想我。",
+            "（被喂食后）下次换我给你做好不好？虽然我不一定会。",
+            "（被夸奖后）你再多夸两句，我其实挺喜欢听的。",
+            "（被摸耳朵后）耳朵好烫，你千万别盯着看。",
+            "（聊天后）你刚才说的那个笑话，其实我偷偷笑了。",
+            "（被摸头后）你干嘛～把我发型都弄乱了。不过……算了。",
+            "（日常发呆）如果现在能牵着你的手去散步就好了。",
+            "（被摸尾巴后）别捏了，我腿都要软了。",
+            "（被投喂苦茶后）好苦！但如果是你递过来的，我还是会喝。",
+            "（聊天后）你平时也这么跟别人聊天吗？最好不要。",
+            "（被摸手后）牵紧一点，别松开了。"
+        ];
+
+        const shopItems = [
+          { id: "mike", type: "hand", name: "金话筒", icon: "🎤", price: 100, owned: false },
+          { id: "glasses", type: "face", name: "限量版墨镜", icon: "🕶️", price: 60, owned: false },
+          { id: "stick", type: "hand", name: "专属应援棒", icon: "🌟", price: 50, owned: false },
+          { id: "necklace", type: "face", name: "银质项链", icon: "📿", price: 80, owned: false },
+          { id: "cape", type: "back", name: "星光披风", icon: "🧥", price: 120, owned: false },
+          { id: "cap", type: "head", name: "潮牌鸭舌帽", icon: "🧢", price: 40, owned: false }
+        ];
+        const foodItems = [
+          { id: 1, name: '牛排', icon: '🥩', value: 25, price: 30, reply: '（眼神瞬间亮起来，语气都轻快了）牛排！你怎么知道我今天想吃这个？（切下一块吃得很满足）我跟你说，我一顿能吃三份，你信不信？你选得太准了。' },
+          { id: 2, name: '芹菜炒牛肉', icon: '🥘', value: 20, price: 25, reply: '（吃了一口，动作微微停顿）这个味道……挺像我妈妈做的。（低头又吃了一口，声音变轻了一点）很好吃。谢谢你啊，我很喜欢这个。' },
+          { id: 3, name: '芒果冰', icon: '🍧', value: 15, price: 15, reply: '（挖了一大勺，眼睛微微眯起）芒果冰。（吃得有点急，冰得微微皱眉，但马上又笑了）夏天吃这个最舒服了。你要不要尝尝？' },
+          { id: 4, name: '西瓜', icon: '🍉', value: 10, price: 10, reply: '（接过西瓜咬了一口，汁水沾到嘴角也没在意）甜。（很自然地又咬了一口）我挺喜欢吃西瓜的。这个选得不错，你有心了。' },
+          { id: 5, name: '饺子', icon: '🥟', value: 15, price: 15, reply: '（看到饺子，神情变得很柔和）饺子啊。（夹起一个慢慢吃着）我外婆包的饺子最好吃了，什么馅儿都喜欢。（抬眼看你）你这个……也有点家里的味道。' },
+          { id: 6, name: '芥末', icon: '🌿', value: -20, price: 5, reply: '（闻到味道就立刻往后躲，眉头紧皱）……芥末？（一脸抗拒地把它推得很远）不行不行，这个我真吃不了。你快拿走，别让我闻到。你干嘛～是不是故意整我？' },
+          { id: 7, name: '肥肉', icon: '🥓', value: -10, price: 10, reply: '（皱着眉把肥肉挑出来，放到一边）我不吃这个。（有点不好意思地摸了摸鼻子）太腻了，我不习惯。你吃吧，我吃瘦的就行。' }
+        ];
+        const flowerItems = [
+          { id: 101, name: '大马士革玫瑰', icon: '🌹', value: 30, price: 50, desc: '经典的浪漫，最适合送给喜欢的人。' },
+          { id: 102, name: '向日葵', icon: '🌻', value: 20, price: 30, desc: '永远面向阳光，就像你一样温暖。' },
+          { id: 103, name: '满天星', icon: '✨', value: 15, price: 25, desc: '甘愿做配角，只想默默陪着你。' },
+          { id: 104, name: '白桔梗', icon: '🤍', value: 20, price: 35, desc: '真诚不变的爱，纯粹又美好。' },
+          { id: 105, name: '蓝玫瑰', icon: '🪻', value: 35, price: 60, desc: '奇迹与不可能实现的事，但遇见你本身就是奇迹。' },
+          { id: 106, name: '郁金香', icon: '🌷', value: 25, price: 40, desc: '博爱、体贴，以及最真挚的祝福。' }
+        ];
+        const milestoneGifts = [
+          { level: 50, id: 'note', name: '手写歌词便签', icon: '📝', desc: '一张边缘有些磨损的便签纸，上面是他亲手写的几句歌词。', reply: '喏，这个给你。其实也不是什么贵重东西，就是那天晚上突然有了点灵感，写着写着就想到了你。我平时不太习惯把这种心里话给别人看，觉得怪不好意思的。但如果是你的话……应该没关系。你把它夹在书里或者放钱包里吧。别弄丢了啊，弄丢了我可要生气的。你干嘛～别一直盯着我，我都不知道说什么了。' },
+          { level: 100, id: 'earring', name: '星星耳钉（同款）', icon: '✨', desc: '一枚闪着微光的小巧星星耳钉，和他耳朵上戴的那个很像。', reply: '你之前不是一直盯着我耳朵看吗？（轻咳了一声，偏过头）别以为我不知道。这枚耳钉，跟我那个是一对的。给你了。它其实代表着我的一部分，现在交给你保管了。你戴上应该会很好看。不过出门的时候要小心点，别弄伤了。我没别的意思，就是想让你戴着它，就像……就像我在你身边一样。好了，拿去吧，你干嘛～非要我说这么明白吗。' },
+          { level: 250, id: 'voicebox', name: '专属晚安语音盒', icon: '🌙', desc: '一个形状像小月亮的小盒子，按一下就会发出他的声音。', reply: '你不在的时候，我其实挺无聊的。（低头摆弄了一下盒子）有时候想跟你说说话，又怕你已经睡了，打扰到你。这个盒子，里面有我录的十几段话。有晚安，有早安，还有……想你了。如果你哪天不开心了，或者睡不着，就按一下。听到我的声音，会不会好受一点？我没在别人面前这么肉麻过，只给你一个人。你干嘛～不许笑话我。' },
+          { level: 400, id: 'ring', name: '恒星戒指', icon: '💍', desc: '一枚没有任何多余装饰，但内圈刻着他名字和星星图样的素圈戒指。', reply: '（深吸一口气，眼神异常认真，拉过你的手，把戒指放在你的掌心）我不知道别人送这种东西是什么意思。但对我来说……这不仅仅是个戒指。这是我给你的承诺。我经历过很多事，也见过很多人，但我很清楚，我想把最好的东西留给你。你愿意戴上它吗？（耳朵红透，眼神却很坚定）虽然我平时不太会说好听的，有时候还会嘴硬。但我希望，你能一直在我身边。我……很爱你。' }
+        ];
+
+        let affection = parseInt(localStorage.getItem('affection')) || 0;
+        let coins = parseInt(localStorage.getItem('coins')) || 500;
+        let isHatched = localStorage.getItem('isHatched') === 'true';
+        let currentImage = isHatched ? IMAGES.normal : IMAGES.egg;
+        let inventory = JSON.parse(localStorage.getItem('inventory')) || { 1: 1, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 };
+        let playerDiary = JSON.parse(localStorage.getItem('playerDiary')) || [];
+        let catDiary = JSON.parse(localStorage.getItem('catDiary')) || [];
+        let memoHistory = JSON.parse(localStorage.getItem('memoHistory')) || [];
+        let albumList = JSON.parse(localStorage.getItem('albumList')) || [];
+        let anniversaryList = JSON.parse(localStorage.getItem('anniversaryList')) || [];
+        let periodDay = localStorage.getItem('periodDay') || '';
+        let playerGifts = JSON.parse(localStorage.getItem('playerGifts')) || [];
+        let giftedLevels = JSON.parse(localStorage.getItem('giftedLevels')) || [];
+        let shopData = JSON.parse(localStorage.getItem('shopData')) || JSON.parse(JSON.stringify(shopItems));
+        let equipped = JSON.parse(localStorage.getItem('equipped')) || { head: "", face: "", back: "", hand: "" };
+
+        const todayStr = new Date().toLocaleDateString();
+        const todayDate = new Date().toDateString();
+        let eggTapCount = 0;
+
+        function initUI() {
+            document.getElementById('affection-num').innerText = affection;
+            document.getElementById('coins-num').innerText = coins;
+
+            // 👇 预加载图片，解决破壳卡顿
+            let preloadNormal = new Image();
+            preloadNormal.src = IMAGES.normal;
+            let preloadAngry = new Image();
+            preloadAngry.src = IMAGES.angry;
+            let preloadShy = new Image();
+            preloadShy.src = IMAGES.shy;
+            // 👆 预加载结束
+
+            if (!isHatched) { 
+                document.getElementById('tip-text').innerText = "试着点击蛋壳看看";
+                document.getElementById('char-img').src = IMAGES.egg;
+            } else {
+                document.getElementById('tip-text').innerText = "到处摸摸坤坤试试看";
+                document.getElementById('char-img').src = IMAGES.normal;
+            }
+            updateLevelTag(); updateEquipUI();
+            if(playerDiary.length === 0) addDiary('player', '今天在程序里点开了蛋壳，他破壳而出了。');
+            if(catDiary.length === 0) addDiary('cat', '（刚从壳里钻出来，警惕地看着四周）……你是谁？别靠近我。');
+            checkTimeAndGreet(); checkDailyEvent(); checkSpecialReminder(); checkOfflineDiary(); checkDailyLoginDiary();
+        }
+
+        function getLevel(aff) {
+            let a = aff !== undefined ? aff : affection;
+            if (a >= 400) return 4; if (a >= 250) return 3; if (a >= 100) return 2; if (a >= 50) return 1; return 0;
+        }
+        function updateLevelTag() { document.getElementById('level-text').innerText = ["极度防备", "放下戒备", "嘴硬微暖", "心动傲娇", "极致偏爱"][getLevel()]; }
+
+        let bubbleTimer;
+        function showBubble(text, faceType = 'normal') {
+            const bubble = document.getElementById('bubble'); const img = document.getElementById('char-img');
+            bubble.innerText = text; bubble.style.display = 'block';
+            if (isHatched) img.src = IMAGES[faceType] || IMAGES.normal;
+            else img.src = IMAGES.egg;
+            
+            const floatText = document.getElementById('float-text');
+            floatText.innerText = '+1'; floatText.style.display = 'block'; floatText.style.animation = 'none'; floatText.offsetHeight; floatText.style.animation = 'floatUp 0.8s ease-out forwards';
+            clearTimeout(bubbleTimer);
+            bubbleTimer = setTimeout(() => { bubble.style.display = 'none'; floatText.style.display = 'none'; img.src = currentImage; }, 3000);
+        }
+
+        function addAffectionSilently(amount) {
+            if (!isHatched) return;
+            let oldLevel = getLevel();
+            affection = Math.min(affection + amount, 999); coins += 5; 
+            localStorage.setItem('affection', affection); localStorage.setItem('coins', coins);
+            document.getElementById('affection-num').innerText = affection; document.getElementById('coins-num').innerText = coins;
+            let newLevel = getLevel(); updateLevelTag();
+            if (newLevel > oldLevel) {
+                setTimeout(() => { showBubble(`【好感度突破！当前状态：${["极度防备", "放下戒备", "嘴硬微暖", "心动傲娇", "极致偏爱"][newLevel]}】`, 'shy'); }, 1000);
+                let texts = ["好像……没那么讨厌他了。", "今天居然主动想去蹭他的手，我一定是疯了。", "我开始习惯他的存在了，这可不是个好兆头。", "彻底栽在这个人类手里了……哼，我乐意。"];
+                addDiary('cat', texts[newLevel - 1]);
+            }
+            checkMilestoneGift();
+            if (Math.random() < 0.03) {
+                let randomGifts = [
+                  { icon: "🍬", name: "星星糖", text: "甜的。吃了心情会变好。" },
+                  { icon: "拨片", name: "旧拨片", text: "我平时弹琴用的，上面有我的痕迹。你拿着玩吧。" },
+                  { icon: "📸", name: "签名照", text: "想我的时候看。不许转手给别人啊。" },
+                  { icon: "🍌", name: "香蕉玩偶", text: "看你今天不太高兴。这个借你抱一会儿，记得还我。" }
+                ];
+                let gift = randomGifts[Math.floor(Math.random() * randomGifts.length)];
+                setTimeout(() => {
+                    document.getElementById('gift-icon').innerText = gift.icon;
+                    document.getElementById('gift-text').innerText = `他别过脸，随手丢给你一个【${gift.name}】：“${gift.text}”`;
+                    document.getElementById('gift-modal').style.display = 'flex';
+                    playerGifts.unshift({ id: "gift_" + Date.now(), name: gift.name, icon: gift.icon, desc: gift.text, date: todayStr });
+                    localStorage.setItem('playerGifts', JSON.stringify(playerGifts));
+                }, 2000);
+            }
+        }
+
+        function addDiary(type, text) {
+            let list = type === 'cat' ? catDiary : playerDiary;
+            if (list.length > 0 && list[0].text === text) return;
+            list.unshift({ date: todayStr, text: text }); if (list.length > 30) list.pop();
+            localStorage.setItem(type === 'cat' ? 'catDiary' : 'playerDiary', JSON.stringify(list));
+        }
+
+        function checkTimeAndGreet() {
+            if (!isHatched) return;
+            let hour = new Date().getHours(); let level = getLevel(); let msg = "";
+            if (hour >= 23 || hour < 6) {
+                let nightMsgs = [["这么晚还不睡，对身体不好。别指望我陪你熬夜。早点休息，我先下线了。夜深了，注意安全。困了就睡，别硬撑。"], ["很晚了，你还不困吗？熬夜对皮肤不好。快去睡吧，明天见。我也准备休息了，晚安。别熬太晚，我会担心。"], ["你还不睡？……我刚好在听歌，没在等你。熬夜会变丑的，快点去睡。你干嘛～还不闭眼。明天起不来别找我。睡前别玩手机了。"], ["这么晚还不睡，是在想我吗？……我就随口一问。快去睡吧，我守着你。梦里要有我。晚安，爱坤。再不睡我要生气了。"], ["夜深了，还不睡吗。过来，靠着我。你睡着之前，我哪儿也不去。晚安，明天睁开眼第一个找我。一直陪着你。不要熬夜了，我心疼。"]];
+                msg = nightMsgs[level][0];
+            } else if (hour >= 6 && hour < 9) {
+                let morningMsgs = [["早。醒了就起来。新的一天，自己安排好。嗯。早啊。别赖床。"], ["早安，昨晚睡得好吗？今天天气不错。新的一天也要加油。早上好，吃早饭了吗？早。快起床吧。"], ["早啊。……我也没起多久。你昨晚没熬夜吧？快点起来吃早饭。早安，今天也记得找我。勉强笑一下。别睡回笼觉了。"], ["早安。睁开眼看到你的消息，心情还不错。今天也要乖乖的。早上好，想我了吗？等你很久了。快起来，想见你。"], ["早安，爱坤。昨晚梦到你了。今天也想第一个看到你。快起床吧，我想你了。新的一天，依然很喜欢你。快点来陪我。"]];
+                msg = morningMsgs[level][0];
+            }
+            if(msg) setTimeout(() => showBubble(msg), 1000);
+        }
+
+        function checkOfflineDiary() {
+            if (!isHatched) return;
+            let lastExit = parseInt(localStorage.getItem('lastExitTime')) || 0;
+            if(lastExit === 0) return;
+            let hoursOffline = (Date.now() - lastExit) / (1000 * 60 * 60);
+            if(hoursOffline >= 1) {
+                let level = getLevel();
+                let pool = offlineDiaryDB[level];
+                addDiary('cat', pool[Math.floor(Math.random() * pool.length)]);
+            }
+        }
+
+        function checkDailyLoginDiary() {
+            if (!isHatched) return;
+            let lastLoginDiary = localStorage.getItem('lastLoginDiaryDate');
+            if (lastLoginDiary !== todayStr) {
+                let level = getLevel();
+                let pool = loginDiaryDB[level];
+                addDiary('cat', pool[Math.floor(Math.random() * pool.length)]); 
+                localStorage.setItem('lastLoginDiaryDate', todayStr);
+            }
+        }
+
+        function checkDailyEvent() {
+            if (!isHatched) return;
+            if (localStorage.getItem('lastEventDate') !== todayDate) {
+                let events = [
+                  { icon: "🌧️", title: "雨中偶遇", desc: "今天你出门没带伞，正站在街边躲雨。正发愁时，一把黑伞撑在了你头顶，转过头发现是他。他微微喘着气，头发有些湿。（他别扭地说：“刚好路过。你傻站着干嘛，不知道找地方躲雨吗？……过来点，都淋湿了。”）", aff: 5 },
+                  { icon: "🍳", title: "笨手笨脚", desc: "你难得下厨，想给他做一顿饭，结果不小心打翻了调料瓶，手忙脚乱。他在厨房门口抱臂看着你，叹了口气走过来。（他接过你手里的东西：“我来吧。你在一旁待着，别添乱了。……手没烫到吧？”）", aff: 2 },
+                  { icon: "🌅", title: "晚霞定格", desc: "傍晚时分，你们坐在天台上。天边的晚霞是绚丽的橘红色。他本来在玩手机，抬头看到后愣了一下，然后举起手机拍了张照。（他拍完后，看了看照片，又看了看你，轻声说：“晚霞很好看。……如果你也在镜头里就好了。”）", aff: 5 },
+                  { icon: "🫂", title: "突如其来的拥抱", desc: "你因为一点小事被他惹生气了，坐在沙发上不理他。他走过来，在你面前站了一会儿，然后突然伸手把你抱进怀里，下巴抵在你的头顶。（他声音闷闷的：“别生气了。我错了还不行吗。你干嘛～不理我比骂我还难受。”）", aff: 5 }
+                ];
+                let ev = events[Math.floor(Math.random() * events.length)];
+                document.getElementById('event-icon').innerText = ev.icon; document.getElementById('event-title').innerText = ev.title; document.getElementById('event-desc').innerText = ev.desc;
+                document.getElementById('daily-event-modal').style.display = 'flex'; addAffectionSilently(ev.aff); addDiary('player', '触发了今日事件：' + ev.title); localStorage.setItem('lastEventDate', todayDate);
+            }
+        }
+        function closeEvent() { document.getElementById('daily-event-modal').style.display = 'none'; }
+
+        function checkSpecialReminder() {
+            if (!isHatched) return;
+            if (localStorage.getItem('lastSpecialRemind') === todayStr) return;
+            let currentDay = new Date().getDate(); let pDay = parseInt(periodDay); let triggered = false; let msg = "";
+            if (!isNaN(pDay)) {
+                let diff = pDay - currentDay; if (diff < -15) diff = (pDay + 30) - currentDay;
+                if (diff === 1 || diff === 2) { triggered = true; msg = getLevel() < 2 ? "喂，人类。看日历的话，是不是快到了？……啧，我可没特意记。这两天不准吃凉的，听到没有？痛死我可不负责。" : "过来。这两天你最好乖一点，生冷的食物已经全部被我扔了。要是敢肚子疼，我就……唉，算了，过来让我抱抱。"; }
+            }
+            let todayMD = (new Date().getMonth()+1).toString().padStart(2,'0') + '-' + currentDay.toString().padStart(2,'0');
+            anniversaryList.forEach(ann => { if(ann.date.includes(todayMD)) { triggered = true; msg = getLevel() < 2 ? `今天是我们约定的“${ann.title}”。……算了，像你这种笨蛋，能记住才怪。` : `今天是我们约定的“${ann.title}”。我可是勉为其难才记下的，你今天不准去陪别人。`; } });
+            if (triggered) { document.getElementById('special-modal-text').innerText = msg; document.getElementById('special-modal').style.display = 'flex'; localStorage.setItem('lastSpecialRemind', todayStr); }
+        }
+        function closeSpecialModal() { document.getElementById('special-modal').style.display = 'none'; }
+
+        function checkMilestoneGift() {
+            milestoneGifts.forEach(gift => {
+                if (affection >= gift.level && giftedLevels.indexOf(gift.level) === -1) {
+                    giftedLevels.push(gift.level); localStorage.setItem('giftedLevels', JSON.stringify(giftedLevels));
+                    playerGifts.unshift({ id: gift.id, name: gift.name, icon: gift.icon, desc: gift.desc, date: todayStr }); localStorage.setItem('playerGifts', JSON.stringify(playerGifts));
+                    setTimeout(() => { document.getElementById('gift-icon').innerText = gift.icon; document.getElementById('gift-text').innerText = gift.reply; document.getElementById('gift-modal').style.display = 'flex'; }, 1000);
+                }
+            });
+        }
+        function closeGiftModal() { document.getElementById('gift-modal').style.display = 'none'; }
+
+        function handleTouch(partKey) {
+            if (!isHatched) { hatchEgg(); return; }
+            let level = getLevel(); let pool = typeof TOUCH_REACTIONS !== 'undefined' && TOUCH_REACTIONS[partKey] ? TOUCH_REACTIONS[partKey][level] : touchDB[partKey][level];
+            let msg = pool[Math.floor(Math.random() * pool.length)]; let face = level < 2 ? 'angry' : 'shy';
+            showBubble(msg, face); addAffectionSilently(1); addDiary('player', '抚摸部位：' + partKey);
+            let touchCount = parseInt(localStorage.getItem('touchCount')) || 0; touchCount++; localStorage.setItem('touchCount', touchCount);
+            if(touchCount % 8 === 0) { 
+                addDiary('cat', behaviorDiaryDB[Math.floor(Math.random()*behaviorDiaryDB.length)]); 
+            }
+        }
+
+        function handleKeyPress(e) { if (e.key === 'Enter') sendMessage(); }
+        
+        function sendMessage() {
+            if (!isHatched) { hatchEgg(); return; }
+            const inputEl = document.getElementById('chat-input'); let text = inputEl.value.trim(); if (!text) return;
+            inputEl.value = ''; let level = getLevel(); let chatArea = document.getElementById('chat-history');
+            
+            // 显示玩家说的话
+            let userMsg = document.createElement('div'); userMsg.className = 'chat-msg msg-user'; userMsg.innerText = text; chatArea.appendChild(userMsg); chatArea.scrollTop = chatArea.scrollHeight;
+            
+            // 👇 新增：识别并保存玩家名字
+            let nameMatch = text.match(/(?:我叫|我的名字是|叫我|名字叫)(.*)/);
+            if (nameMatch && nameMatch[1]) {
+                let playerName = nameMatch[1].trim();
+                localStorage.setItem('playerName', playerName);
+            }
+            
+            // 获取之前保存的名字，如果没有就默认叫“你”
+            let savedName = localStorage.getItem('playerName') || '你';
+
+            // 1. 最高优先级：生病判断（只要触发了生病词，直接跳过后面的匹配）
+            let isSick = false; let sickWords = ["生病", "感冒", "发烧", "头疼", "难受", "不舒服", "咳嗽", "肚子疼"];
+            for (let k = 0; k < sickWords.length; k++) { if (text.indexOf(sickWords[k]) > -1) { isSick = true; break; } }
+            
+            let matched = false; let reply = "";
+            
+            if (isSick) {
+                let sickPool = null;
+                for (let i = 0; i < chatDB.length; i++) {
+                    if (chatDB[i].category === "生病") { sickPool = chatDB[i]; break; }
+                }
+                if (sickPool) reply = sickPool.levels[level][Math.floor(Math.random() * sickPool.levels[level].length)]; else reply = "抱歉，身体不舒服的话要好好休息。"; 
+                matched = true;
+                
+                // 触发塞药弹窗
+                setTimeout(() => { 
+                    document.getElementById('gift-icon').innerText = "💊🩹"; 
+                    document.getElementById('gift-text').innerText = "他嘴上没说什么，但还是把药丸和创可贴塞到了你手里。"; 
+                    document.getElementById('gift-modal').style.display = 'flex'; 
+                    playerGifts.unshift({ id: "med_" + Date.now(), name: "感冒药和创可贴", icon: "💊🩹", desc: "他硬塞给你的。", date: todayStr }); 
+                    localStorage.setItem('playerGifts', JSON.stringify(playerGifts)); 
+                    addDiary('cat', "笨蛋，居然生病了。看着真让人心烦。"); 
+                }, 1500);
+            } else {
+                // 2. 按优先级遍历词库：从上往下找，谁在 dialogue.js 里排在前面，谁就先被匹配
+                for (let i = 0; i < chatDB.length; i++) { 
+                    let category = chatDB[i]; 
+                    if (!category.keywords || category.keywords.length === 0) continue; 
+                    
+                    for (let j = 0; j < category.keywords.length; j++) { 
+                        if (text.indexOf(category.keywords[j]) > -1) { 
+                            reply = category.levels[level][Math.floor(Math.random() * category.levels[level].length)]; 
+                            matched = true; 
+                            break; // 在当前分类里找到了，跳出内层循环
+                        } 
+                    } 
+                    if (matched) break; // 🚨 核心：如果找到了匹配的分类，立刻跳出外层循环，不再往下找低优先级的词！
+                }
+            }
+            
+            // 3. 兜底逻辑：如果全都没匹配上
+            if (!matched) { 
+                let fallbackPool = chatDB[chatDB.length - 1].levels[level]; 
+                reply = fallbackPool[Math.floor(Math.random() * fallbackPool.length)]; 
+            }
+            
+            // 👇 新增：把台词里的 {name} 替换成你真正的名字
+            reply = reply.replace(/{name}/g, savedName);
+            
+            // 4. 展示回复（带打字动画）
+            // 1. 先立刻弹出一个带有 typing 样式的提示
+            let loadingMsg = document.createElement('div'); 
+            loadingMsg.className = 'chat-msg msg-ai typing'; // 添加了 typing 类
+            loadingMsg.innerText = "对方正在输入..."; 
+            chatArea.appendChild(loadingMsg); 
+            chatArea.scrollTop = chatArea.scrollHeight;
+
+            // 2. 延迟 1.5 秒后再显示真正的回复
+            setTimeout(() => { 
+                // 把“正在输入”的文字，替换成真正的回复，并移除 typing 类
+                loadingMsg.className = 'chat-msg msg-ai'; 
+                loadingMsg.innerText = reply; 
+                
+                // 触发其他动作
+                let face = level < 2 ? 'angry' : 'normal'; 
+                showBubble(reply, face); 
+                addAffectionSilently(2); 
+                addDiary('player', '聊天：' + text);
+                
+                chatArea.scrollTop = chatArea.scrollHeight; 
+            }, 1500);
+        }
+        
+        function toggleForm() {
+            if (!isHatched) { hatchEgg(); return; }
+            alert("当前只有一个形态哦~");
+        }
+
+        function hatchEgg() {
+            if (isHatched) return; 
+            eggTapCount++;
+            const img = document.getElementById('char-img');
+            
+            if (eggTapCount < 5) { 
+                img.classList.add('shake-animation');
+                setTimeout(() => { img.classList.remove('shake-animation'); }, 400);
+                // 前4次敲击：正常人的反应
+                showBubble([
+                    "（里面传来轻微的动静，似乎有人翻了个身）", 
+                    "（听到了一声有些闷闷的嘟囔：“谁啊……外面好吵。”）", 
+                    "（蛋壳裂开了一条缝，透出了一点光）", 
+                    "（里面的动静变大了，好像马上就要出来了）"
+                ][eggTapCount - 1]); 
+            } else {
+                isHatched = true; currentImage = IMAGES.normal; document.getElementById('char-img').src = currentImage;
+                document.getElementById('tip-text').innerText = "到处摸摸坤坤试试看";
+                // 破壳瞬间：有点懵，带点防备和傲娇，但不夸张
+                showBubble("（“咔嚓”一声，蛋壳彻底碎裂。他有些踉跄地跌坐出来，拍了拍身上的灰，抬起头有些防备地看着你）……嘶。是你把我敲醒的？（微微皱眉，打量了一下四周）这到底是个什么地方。", 'normal');
+                localStorage.setItem('isHatched', 'true'); localStorage.setItem('currentImage', currentImage);
+            }
+        }
+        
+        function openPanel(type) {
+            document.getElementById('modal-mask').style.display = 'flex';
+            ['shop', 'backpack', 'diary', 'memo', 'album', 'special'].forEach(id => document.getElementById('panel-' + id).style.display = 'none');
+            document.getElementById('panel-' + type).style.display = 'block';
+            if (type === 'shop') { document.getElementById('panel-title').innerText = "🛍️ 商城"; renderShop(); } 
+            else if (type === 'backpack') { document.getElementById('panel-title').innerText = "🎒 背包"; renderBackpack(); } 
+            else if (type === 'diary') { document.getElementById('panel-title').innerText = "📖 羁绊日记"; renderDiary('player'); } 
+            else if (type === 'memo') { document.getElementById('panel-title').innerText = "📝 今日记录"; renderMemo(); } 
+            else if (type === 'album') { document.getElementById('panel-title').innerText = "📷 回忆相册"; renderAlbum(); }
+        }
+        function openSpecialPanel() { openPanel('special'); document.getElementById('panel-title').innerText = "🌸 特殊日子"; document.getElementById('period-input').value = periodDay; renderAnniversary(); }
+        function closePanel() { document.getElementById('modal-mask').style.display = 'none'; }
+
+        let currentShopTab = 'food';
+        function switchShopTab(tab) {
+            currentShopTab = tab;
+            document.querySelectorAll('#panel-shop .tab-item').forEach((el, i) => { if((tab === 'food' && i === 0) || (tab === 'flower' && i === 1) || (tab === 'wear' && i === 2)) el.classList.add('active'); else el.classList.remove('active'); });
+            renderShop();
+        }
+        function renderShop() {
+            const listEl = document.getElementById('shop-list'); listEl.innerHTML = '';
+            if (currentShopTab === 'food') { foodItems.forEach((item, index) => { listEl.innerHTML += `<div class="item" onclick="buyFood(${index})"><span class="item-icon">${item.icon}</span><div class="item-info"><span class="item-name">${item.name}</span><span class="item-desc">🪙 ${item.price} (好感${item.value > 0 ? '+' : ''}${item.value})</span></div></div>`; }); } 
+            else if (currentShopTab === 'flower') { flowerItems.forEach((item, index) => { listEl.innerHTML += `<div class="item" onclick="buyFlower(${index})"><span class="item-icon">${item.icon}</span><div class="item-info"><span class="item-name">${item.name}</span><span class="item-desc" style="color:#666;">${item.desc}</span><span class="item-desc" style="color:#ff69b4;">🪙 ${item.price} (好感+${item.value})</span></div></div>`; }); } 
+            else { shopData.forEach((item, index) => { let statusHtml = ''; if (!item.owned) statusHtml = `<span class="item-desc">🪙 ${item.price} 购买</span>`; else if (equipped[item.type] === item.id) statusHtml = `<span class="item-desc wearing-text">脱下</span>`; else statusHtml = `<span class="item-desc equip-text">点击穿戴</span>`; listEl.innerHTML += `<div class="item" onclick="handleShop(${index})"><span class="item-icon">${item.icon}</span><div class="item-info"><span class="item-name">${item.name}</span>${statusHtml}</div></div>`; }); }
+        }
+        function buyFood(index) {
+            if (!isHatched) { hatchEgg(); return; } let food = foodItems[index];
+            if (coins >= food.price) { if(confirm(`确定要花费 ${food.price} 金币购买【${food.name}】吗？`)) { coins -= food.price; inventory[food.id] = (inventory[food.id] || 0) + 1; localStorage.setItem('coins', coins); localStorage.setItem('inventory', JSON.stringify(inventory)); document.getElementById('coins-num').innerText = coins; alert('已放入背包'); renderShop(); } } else alert("金币不足哦！");
+        }
+        function buyFlower(index) {
+            if (!isHatched) { hatchEgg(); return; } let flower = flowerItems[index];
+            if (coins >= flower.price) { if(confirm(`确定花费 ${flower.price} 金币购买【${flower.name}】送给坤坤吗？`)) { coins -= flower.price; localStorage.setItem('coins', coins); document.getElementById('coins-num').innerText = coins; showBubble(`哼，送我的？……${flower.name}。勉强收下吧，别指望我会说谢谢。`, 'shy'); addAffectionSilently(flower.value); addDiary('player', '送了花朵：' + flower.name); renderShop(); } } else alert("金币不足！");
+        }
+        function handleShop(index) {
+            if (!isHatched) { hatchEgg(); return; } let item = shopData[index];
+            if (!item.owned) {
+                if (coins >= item.price) { if(confirm(`确定要花费 ${item.price} 金币购买【${item.name}】吗？`)) { coins -= item.price; item.owned = true; equipped[item.type] = item.id; localStorage.setItem('coins', coins); localStorage.setItem('shopData', JSON.stringify(shopData)); localStorage.setItem('equipped', JSON.stringify(equipped)); document.getElementById('coins-num').innerText = coins; updateEquipUI(); renderShop(); } } else alert("金币不足！");
+            } else { equipped[item.type] = equipped[item.type] === item.id ? "" : item.id; localStorage.setItem('equipped', JSON.stringify(equipped)); updateEquipUI(); renderShop(); }
+        }
+        function updateEquipUI() {
+            ['head', 'face', 'hand', 'back'].forEach(type => {
+                let el = document.getElementById('acc-' + type); let equippedId = equipped[type];
+                if (equippedId) { let item = shopData.find(i => i.id === equippedId); if (item) { el.innerText = item.icon; el.style.display = 'block'; return; } }
+                el.style.display = 'none';
+            });
+        }
+
+        let currentBackpackTab = 'cat';
+        function switchBackpackTab(tab) {
+            currentBackpackTab = tab;
+            document.querySelectorAll('#panel-backpack .tab-item').forEach((el, i) => { if((tab === 'cat' && i === 0) || (tab === 'player' && i === 1)) el.classList.add('active'); else el.classList.remove('active'); });
+            renderBackpack();
+        }
+        function renderBackpack() {
+            const listEl = document.getElementById('backpack-list'); listEl.innerHTML = ''; let hasItem = false;
+            if(currentBackpackTab === 'cat') {
+                foodItems.forEach((item, index) => { if (inventory[item.id] > 0) { hasItem = true; listEl.innerHTML += `<div class="item" onclick="feedFood(${index})"><span class="item-icon">${item.icon}</span><div class="item-info"><span class="item-name">${item.name} <span style="color:#F59A23;font-size:12px;margin-left:10px;">x${inventory[item.id]}</span></span><span class="item-desc">点击投喂</span></div></div>`; } });
+                if(!hasItem) listEl.innerHTML = `<div style="text-align:center; color:#999; margin-top:20px;">背包空空如也，快去商城买点吃的吧~</div>`;
+            } else {
+                if(playerGifts.length === 0) { listEl.innerHTML = `<div style="text-align:center; color:#999; margin-top:20px;">好感度提升时会收到他送的礼物哦</div>`; } 
+                else { playerGifts.forEach(item => { listEl.innerHTML += `<div class="item"><span class="item-icon">${item.icon}</span><div class="item-info"><div style="display:flex; justify-content: space-between;"><span class="item-name">${item.name}</span><span style="font-size:10px; color:#999; margin-top:4px;">${item.date}</span></div><span class="item-desc" style="color:#ff69b4;">${item.desc}</span></div></div>`; }); }
+            }
+        }
+        function feedFood(index) {
+            if (!isHatched) { hatchEgg(); return; } let food = foodItems[index];
+            if (inventory[food.id] > 0) {
+                inventory[food.id] -= 1; localStorage.setItem('inventory', JSON.stringify(inventory)); closePanel();
+                showBubble(food.reply, food.value < 0 ? 'angry' : 'shy'); addDiary('player', '投喂食物：' + food.name);
+                let affChange = food.value; addAffectionSilently(affChange);
+                let feedCount = parseInt(localStorage.getItem('feedCount')) || 0; feedCount++; localStorage.setItem('feedCount', feedCount);
+                if (feedCount % 2 === 0 || affChange < 0) { 
+                    addDiary('cat', behaviorDiaryDB[Math.floor(Math.random()*behaviorDiaryDB.length)]); 
+                }
+            }
+        }
+
+        let currentDiaryTab = 'player';
+        function switchDiaryTab(tab) {
+            currentDiaryTab = tab;
+            document.querySelectorAll('#panel-diary .tab-item').forEach((el, i) => { if((tab === 'player' && i === 0) || (tab === 'cat' && i === 1)) el.classList.add('active'); else el.classList.remove('active'); });
+            renderDiary(tab);
+        }
+        function renderDiary(type) {
+            const listEl = document.getElementById('diary-list'); listEl.innerHTML = '';
+            let list = type === 'player' ? playerDiary : catDiary;
+            if (list.length === 0) { listEl.innerHTML = `<div style="text-align:center; color:#999; padding:20px;">还没有日记哦</div>`; return; }
+            list.forEach(item => { listEl.innerHTML += `<div class="diary-card ${type === 'cat' ? 'cat-diary' : ''}"><span class="diary-date">${item.date}</span><span class="diary-text">${item.text}</span></div>`; });
+        }
+
+        let selectedWeather = '☀️'; let selectedMood = '😊';
+        function pickWeather(el, val) { document.querySelectorAll('.emoji-picker')[0].querySelectorAll('span').forEach(span => span.classList.remove('active')); el.classList.add('active'); selectedWeather = val; }
+        function pickMood(el, val) { document.querySelectorAll('.emoji-picker')[1].querySelectorAll('span').forEach(span => span.classList.remove('active')); el.classList.add('active'); selectedMood = val; }
+        function saveMemo() {
+            if (!isHatched) { hatchEgg(); return; } let text = document.getElementById('memo-input-text').value.trim(); if (!text) return alert("写点什么再保存吧~");
+            let newRecord = { id: Date.now(), date: todayStr, text: text, weather: selectedWeather, mood: selectedMood, replied: false, reply: "" };
+            memoHistory.unshift(newRecord); localStorage.setItem('memoHistory', JSON.stringify(memoHistory)); document.getElementById('memo-input-text').value = '';
+            addDiary('player', '记录日程：' + text); renderMemo();
+            setTimeout(() => { generateLongReply(0); renderMemo(); }, 1000);
+        }
+        function generateLongReply(index) {
+            let memo = memoHistory[index]; if (!memo || memo.replied) return;
+            let level = getLevel(); let text = memo.text;
+            
+            let chosenReply = "";
+            if (level <= 1) {
+                chosenReply = "今天居然收到你的长篇大论，还真是稀奇。你说你今天吃了一家很好吃的甜点，还遇到了像小狗一样的云。我一边看一边在想那个画面。今天傍晚的晚霞很好看，粉紫色的，我本来想拍下来，结果手机拿晚了，一下子就没了。你那边如果也有晚霞的话，记得看。你说心情还不错，我也挺高兴的。虽然我们还没到那种无话不谈的地步，但看你碎碎念的样子，我觉得挺安心的。希望你每天都能有这种平淡的开心。如果哪天不开心了，也别藏着，我勉强听你说说吧。";
+            } else if (level === 2) {
+                chosenReply = "爱坤，看到你写的信了。你这人是不是傻，天气降温了也不知道多穿件衣服？真让人不省心。我在练习室里出了一身汗，本来挺热的，看到你说今天被工作搞得有点烦，我瞬间就觉得这天气也没那么难熬了。……我才没有很担心你，我就是觉得，你要是病了，我还得抽时间照顾你，很麻烦的。你听话一点行不行？如果实在觉得委屈，就深呼吸，或者在心里骂我两句。我在这儿呢，不会走的，你什么时候都能来找我。下次记得带伞，不然我就要生气了，你干嘛～一点都不让人放心。";
+            } else if (level === 3) {
+                chosenReply = "爱坤，今天一直没看到你上线，结果先看到了你的日记。你说今天有点累，想早点睡。我本来打了一大段话想叫你来陪我，最后又一个字一个字删掉了。你干嘛～每次都让我这么牵肠挂肚。我不管，明天你必须要多陪我才行。今天天气挺阴的，跟我心情差不多。你不在的时候，连空气都安静得有点过分。如果你累了就好好休息，但明天醒来第一件事一定要找我。晚上睡觉盖好被子，别着凉。其实我挺想跟你道晚安的，要是你在就好了。";
+            } else {
+                chosenReply = "爱坤，今天一睁眼就看到了你的留言。你说你有点迷茫，不知道该往哪走。其实我看着这些字的时候，心里挺难受的。我想告诉你，不管你选什么，我都会支持你。如果选错了也没关系，大不了回来，我养你。我今天这里天气很好，太阳很大，但我没什么心思出门，只想坐在这里给你回信。你不要一个人把所有事都扛着，你可以依赖我。我平时可能不太会说这些肉麻的话，但请你一定要记住。把那些坏心情都扔给我吧，我接得住。我什么都不怕，就怕你难过。好了，去吃点好吃的，乖一点。";
+            }
+            memoHistory[index].replied = true; memoHistory[index].reply = chosenReply; localStorage.setItem('memoHistory', JSON.stringify(memoHistory)); addDiary('cat', '我给她写了长长的一封信。');
+        }
+        function renderMemo() {
+            const listEl = document.getElementById('memo-history-list'); listEl.innerHTML = '';
+            if (memoHistory.length === 0) { listEl.innerHTML = `<div style="text-align:center; color:#999; padding:20px;">还没有记录哦</div>`; return; }
+            memoHistory.forEach(item => {
+                let letterHtml = item.replied ? `<div class="letter-box"><div class="letter-header">✉️ 坤坤的来信：</div><span class="letter-content">${item.reply}</span></div>` : `<div class="letter-box" style="background:#F8F9FA;"><div class="letter-header">✉️ 尚未收到回信</div><span class="letter-content" style="color:#999;">（他似乎还没看到，等明天再来看吧…）</span></div>`;
+                listEl.innerHTML += `<div class="memo-card"><div class="memo-card-header"><span class="memo-time">${item.date}</span><span class="memo-tags">${item.weather} ${item.mood}</span></div><div class="memo-text-content">我的日程：${item.text}</div>${letterHtml}</div>`;
+            });
+        }
+
+        let currentAlbumTab = 'all';
+        function switchAlbumTab(tab) {
+            currentAlbumTab = tab;
+            document.querySelectorAll('#panel-album .tab-item').forEach((el, i) => { if((tab === 'all' && i === 0) || (tab === 'daily' && i === 1)) el.classList.add('active'); else el.classList.remove('active'); });
+            renderAlbum();
+        }
+        function renderAlbum() {
+            const listEl = document.getElementById('album-grid-list'); listEl.innerHTML = '';
+            albumList.forEach((item, index) => { if (currentAlbumTab === 'all' || item.category === currentAlbumTab) { listEl.innerHTML += `<div class="album-item"><img class="album-img" src="${item.url}"><div class="album-note">${item.note}</div><div class="album-delete" onclick="deletePhoto(${index}, event)">×</div></div>`; } });
+            listEl.innerHTML += `<div class="album-add" onclick="document.getElementById('file-input').click()">+</div>`;
+        }
+        function handleFileUpload(event) {
+            if (!isHatched) { hatchEgg(); return; }
+            const file = event.target.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                let base64Img = e.target.result; let note = prompt("写个回忆备注吧", "无备注"); if(note === null) return;
+                albumList.push({ url: base64Img, note: note, category: 'daily' });
+                try { localStorage.setItem('albumList', JSON.stringify(albumList)); renderAlbum(); } catch(err) { alert("图片太大，本地存储空间不足啦！"); albumList.pop(); }
+            };
+            reader.readAsDataURL(file); event.target.value = '';
+        }
+        function deletePhoto(index, event) {
+            event.stopPropagation(); if(confirm("确定要删除这张回忆吗？")) { albumList.splice(index, 1); localStorage.setItem('albumList', JSON.stringify(albumList)); renderAlbum(); }
+        }
+
+        let currentSpecialTab = 'period';
+        function switchSpecialTab(tab) {
+            currentSpecialTab = tab;
+            document.querySelectorAll('#panel-special .tab-item').forEach((el, i) => { if((tab === 'period' && i === 0) || (tab === 'anniversary' && i === 1)) el.classList.add('active'); else el.classList.remove('active'); });
+            if(tab === 'period') { document.getElementById('tab-period').style.display = 'block'; document.getElementById('tab-anniversary').style.display = 'none'; } 
+            else { document.getElementById('tab-period').style.display = 'none'; document.getElementById('tab-anniversary').style.display = 'block'; }
+        }
+        function savePeriod() {
+            let day = document.getElementById('period-input').value;
+            if(day && parseInt(day) >= 1 && parseInt(day) <= 31) { periodDay = day; localStorage.setItem('periodDay', periodDay); alert("记录成功，他会记住的！"); } else alert("请输入1-31的有效日期哦");
+        }
+        function saveAnniversary() {
+            let title = document.getElementById('anniversary-title-input').value.trim(); let dateStr = document.getElementById('anniversary-date-input').value.trim();
+            if(!title || !dateStr) return alert("名称和日期都要填哦");
+            let formatStr = dateStr.replace(/\//g, '-'); let parts = formatStr.split('-'); let month, day;
+            if (parts.length === 3) { month = parseInt(parts[1]); day = parseInt(parts[2]); } else if (parts.length === 2) { month = parseInt(parts[0]); day = parseInt(parts[1]); }
+            if (isNaN(month) || isNaN(day) || month < 1 || month > 12 || day < 1 || day > 31) return alert("日期格式有误，如 10-22");
+            let finalDate = (month < 10 ? '0' + month : month) + '-' + (day < 10 ? '0' + day : day);
+            anniversaryList.unshift({ id: Date.now(), title: title, date: finalDate }); localStorage.setItem('anniversaryList', JSON.stringify(anniversaryList));
+            document.getElementById('anniversary-title-input').value = ''; document.getElementById('anniversary-date-input').value = '';
+            renderAnniversary(); alert("纪念日已添加！");
+        }
+        function renderAnniversary() {
+            const listEl = document.getElementById('anniversary-list-container'); listEl.innerHTML = '';
+            if(anniversaryList.length === 0) { listEl.innerHTML = `<div style="color:#999; font-size:12px;">暂无</div>`; return; }
+            anniversaryList.forEach(item => { listEl.innerHTML += `<div class="anniversary-item"><div class="anniversary-info"><div class="anniversary-title">${item.title}</div><div class="anniversary-date">${item.date}</div></div><div class="delete-btn" onclick="deleteAnniversary(${item.id})">×</div></div>`; });
+        }
+        function deleteAnniversary(id) { anniversaryList = anniversaryList.filter(item => item.id !== id); localStorage.setItem('anniversaryList', JSON.stringify(anniversaryList)); renderAnniversary(); }
+
+        window.addEventListener('beforeunload', function () { localStorage.setItem('lastExitTime', Date.now()); });
+        initUI();
+    </script>
+</body>
+</html>

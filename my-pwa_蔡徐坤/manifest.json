@@ -1,0 +1,8 @@
+{
+  "name": "私人陪伴系统",
+  "short_name": "陪伴",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ff69b4"
+}
